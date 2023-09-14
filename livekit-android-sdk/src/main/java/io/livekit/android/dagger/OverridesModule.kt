@@ -1,11 +1,16 @@
 package io.livekit.android.dagger
 
+import android.annotation.SuppressLint
 import androidx.annotation.Nullable
 import dagger.Module
 import dagger.Provides
 import io.livekit.android.LiveKitOverrides
 import javax.inject.Named
 
+@SuppressLint("KotlinNullnessAnnotation")
+/**
+ * @suppress
+ */
 @Module
 class OverridesModule(private val overrides: LiveKitOverrides) {
 

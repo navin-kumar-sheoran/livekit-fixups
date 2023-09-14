@@ -8,6 +8,9 @@ import io.livekit.android.audio.AudioSwitchHandler
 import javax.inject.Named
 import javax.inject.Provider
 
+/**
+ * @suppress
+ */
 @Module
 object AudioHandlerModule {
     @Provides

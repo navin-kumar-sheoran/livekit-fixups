@@ -5,6 +5,9 @@ import dagger.Provides
 import kotlinx.coroutines.Dispatchers
 import javax.inject.Named
 
+/**
+ * @suppress
+ */
 @Module
 object CoroutinesModule {
     @Provides

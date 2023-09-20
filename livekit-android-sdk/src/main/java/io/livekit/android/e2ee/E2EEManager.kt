@@ -46,13 +46,17 @@ constructor(
 ) {
     private var room: Room? = null
     private var keyProvider: KeyProvider
-    private var frameCryptors = mutableMapOf<String, FrameCryptor>()
+    private var frameCryptors = mutableMapOf<Pair<String, String>, FrameCryptor>()
     private var algorithm: FrameCryptorAlgorithm = FrameCryptorAlgorithm.AES_GCM
     private lateinit var emitEvent: (roomEvent: RoomEvent) -> Unit?
     var enabled: Boolean = false
 
     init {
         this.keyProvider = keyProvider
+    }
+
+    public fun keyProvider(): KeyProvider {
+        return this.keyProvider
     }
 
     suspend fun setup(room: Room, emitEvent: (roomEvent: RoomEvent) -> Unit) {
@@ -82,8 +86,6 @@ constructor(
     }
 
     public fun addSubscribedTrack(track: Track, publication: TrackPublication, participant: RemoteParticipant, room: Room) {
-        var trackId = publication.sid
-        var participantId = participant.sid
         var rtpReceiver: RtpReceiver? = when (publication.track!!) {
             is RemoteAudioTrack -> (publication.track!! as RemoteAudioTrack).receiver
             is RemoteVideoTrack -> (publication.track!! as RemoteVideoTrack).receiver
@@ -91,7 +93,7 @@ constructor(
                 throw IllegalArgumentException("unsupported track type")
             }
         }
-        var frameCryptor = addRtpReceiver(rtpReceiver!!, participantId, trackId, publication.track!!.kind.name.lowercase())
+        var frameCryptor = addRtpReceiver(rtpReceiver!!, participant.identity!!, publication.sid, publication.track!!.kind.name.lowercase())
         frameCryptor.setObserver { trackId, state ->
             LKLog.i { "Receiver::onFrameCryptionStateChanged: $trackId, state:  $state" }
             emitEvent(
@@ -106,9 +108,18 @@ constructor(
         }
     }
 
-    public fun addPublishedTrack(track: Track, publication: TrackPublication, participant: LocalParticipant, room: Room) {
+    public fun removeSubscribedTrack(track: Track, publication: TrackPublication, participant: RemoteParticipant, room: Room) {
         var trackId = publication.sid
-        var participantId = participant.sid
+        var participantId = participant.identity
+        var frameCryptor = frameCryptors.get(trackId to participantId)
+        if (frameCryptor != null) {
+            frameCryptor.isEnabled = false
+            frameCryptor.dispose()
+            frameCryptors.remove(trackId to participantId)
+        }
+    }
+
+    public fun addPublishedTrack(track: Track, publication: TrackPublication, participant: LocalParticipant, room: Room) {
         var rtpSender: RtpSender? = when (publication.track!!) {
             is LocalAudioTrack -> (publication.track!! as LocalAudioTrack)?.sender
             is LocalVideoTrack -> (publication.track!! as LocalVideoTrack)?.sender
@@ -117,7 +128,7 @@ constructor(
             }
         } ?: throw IllegalArgumentException("rtpSender is null")
 
-        var frameCryptor = addRtpSender(rtpSender!!, participantId, trackId, publication.track!!.kind.name.lowercase())
+        var frameCryptor = addRtpSender(rtpSender!!, participant.identity!!, publication.sid, publication.track!!.kind.name.lowercase())
         frameCryptor.setObserver { trackId, state ->
             LKLog.i { "Sender::onFrameCryptionStateChanged: $trackId, state:  $state" }
             emitEvent(
@@ -129,6 +140,17 @@ constructor(
                     state = e2eeStateFromFrameCryptoState(state),
                 ),
             )
+        }
+    }
+
+    public fun removePublishedTrack(track: Track, publication: TrackPublication, participant: LocalParticipant, room: Room) {
+        var trackId = publication.sid
+        var participantId = participant.identity
+        var frameCryptor = frameCryptors.get(trackId to participantId)
+        if (frameCryptor != null) {
+            frameCryptor.isEnabled = false
+            frameCryptor.dispose()
+            frameCryptors.remove(trackId to participantId)
         }
     }
 
@@ -146,41 +168,28 @@ constructor(
     }
 
     private fun addRtpSender(sender: RtpSender, participantId: String, trackId: String, kind: String): FrameCryptor {
-        var pid = "$kind-sender-$participantId-$trackId"
         var frameCryptor = FrameCryptorFactory.createFrameCryptorForRtpSender(
             sender,
-            pid,
+            participantId,
             algorithm,
             keyProvider.rtcKeyProvider,
         )
 
-        frameCryptors[trackId] = frameCryptor
+        frameCryptors[trackId to participantId] = frameCryptor
         frameCryptor.setEnabled(enabled)
-        if (keyProvider.enableSharedKey) {
-            keyProvider.rtcKeyProvider?.setKey(pid, 0, keyProvider?.sharedKey)
-            frameCryptor.setKeyIndex(0)
-        }
-
         return frameCryptor
     }
 
     private fun addRtpReceiver(receiver: RtpReceiver, participantId: String, trackId: String, kind: String): FrameCryptor {
-        var pid = "$kind-receiver-$participantId-$trackId"
         var frameCryptor = FrameCryptorFactory.createFrameCryptorForRtpReceiver(
             receiver,
-            pid,
+            participantId,
             algorithm,
             keyProvider.rtcKeyProvider,
         )
 
-        frameCryptors[trackId] = frameCryptor
+        frameCryptors[trackId to participantId] = frameCryptor
         frameCryptor.setEnabled(enabled)
-
-        if (keyProvider.enableSharedKey) {
-            keyProvider.rtcKeyProvider?.setKey(pid, 0, keyProvider?.sharedKey)
-            frameCryptor.setKeyIndex(0)
-        }
-
         return frameCryptor
     }
 
@@ -192,12 +201,7 @@ constructor(
         this.enabled = enabled
         for (item in frameCryptors.entries) {
             var frameCryptor = item.value
-            var participantId = item.key
             frameCryptor.setEnabled(enabled)
-            if (keyProvider.enableSharedKey) {
-                keyProvider.rtcKeyProvider?.setKey(participantId, 0, keyProvider?.sharedKey)
-                frameCryptor.setKeyIndex(0)
-            }
         }
     }
 
@@ -205,10 +209,8 @@ constructor(
      * Ratchet key for local participant
      */
     fun ratchetKey() {
-        for (participantId in frameCryptors.keys) {
-            var newKey = keyProvider.rtcKeyProvider?.ratchetKey(participantId, 0)
-            LKLog.d { "ratchetKey: newKey: $newKey" }
-        }
+        var newKey = keyProvider.ratchetSharedKey()
+        LKLog.d { "ratchetSharedKey: newKey: $newKey" }
     }
 
     fun cleanUp() {

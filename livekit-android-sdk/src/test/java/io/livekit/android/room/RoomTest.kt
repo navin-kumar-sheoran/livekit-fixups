@@ -1,3 +1,19 @@
+/*
+ * Copyright 2023 LiveKit, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package io.livekit.android.room
 
 import android.content.Context
@@ -8,6 +24,7 @@ import androidx.test.platform.app.InstrumentationRegistry
 import io.livekit.android.assert.assertIsClassList
 import io.livekit.android.audio.NoAudioHandler
 import io.livekit.android.coroutines.TestCoroutineRule
+import io.livekit.android.e2ee.E2EEManager
 import io.livekit.android.events.*
 import io.livekit.android.memory.CloseableManager
 import io.livekit.android.mock.*
@@ -45,6 +62,9 @@ class RoomTest {
     @Mock
     lateinit var rtcEngine: RTCEngine
 
+    @Mock
+    lateinit var e2EEManagerFactory: E2EEManager.Factory
+
     var eglBase: EglBase = MockEglBase()
 
     val localParticipantFactory = object : LocalParticipant.Factory {
@@ -72,7 +92,8 @@ class RoomTest {
             defaultDispatcher = coroutineRule.dispatcher,
             ioDispatcher = coroutineRule.dispatcher,
             audioHandler = NoAudioHandler(),
-            closeableManager = CloseableManager()
+            closeableManager = CloseableManager(),
+            e2EEManagerFactory = e2EEManagerFactory,
         )
     }
 
@@ -83,7 +104,6 @@ class RoomTest {
                     room.onJoinResponse(SignalClientTest.JOIN.join)
                     SignalClientTest.JOIN.join
                 }
-
         }
         rtcEngine.stub {
             onBlocking { rtcEngine.client }
@@ -124,7 +144,7 @@ class RoomTest {
                 RoomEvent.RoomMetadataChanged::class.java,
                 RoomEvent.RecordingStatusChanged::class.java,
             ),
-            events
+            events,
         )
     }
 
@@ -171,7 +191,6 @@ class RoomTest {
 
     @Test
     fun onDisconnect() = runTest {
-
         connect()
         val eventCollector = EventCollector(room.events, coroutineRule.scope)
         room.disconnect()

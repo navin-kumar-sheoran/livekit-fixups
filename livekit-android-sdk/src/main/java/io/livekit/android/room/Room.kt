@@ -1,3 +1,19 @@
+/*
+ * Copyright 2023 LiveKit, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 @file:Suppress("unused")
 
 package io.livekit.android.room
@@ -50,6 +66,7 @@ constructor(
     val audioHandler: AudioHandler,
     @Singleton
     private val closeableManager: CloseableManager,
+    private val e2EEManagerFactory: E2EEManager.Factory,
 ) : RTCEngine.Listener, ParticipantListener {
 
     private lateinit var coroutineScope: CoroutineScope
@@ -64,7 +81,7 @@ constructor(
         CONNECTING,
         CONNECTED,
         DISCONNECTED,
-        RECONNECTING;
+        RECONNECTING,
     }
 
     /**
@@ -74,7 +91,7 @@ constructor(
         SPEAKER_UPDATE,
         NODE_FAILURE,
         MIGRATION,
-        SERVER_LEAVE;
+        SERVER_LEAVE,
     }
 
     @JvmInline
@@ -208,7 +225,7 @@ constructor(
                             room = this@Room,
                             publication = it.publication,
                             participant = it.participant,
-                        )
+                        ),
                     )
 
                     is ParticipantEvent.ParticipantPermissionsChanged -> emitWhenConnected(
@@ -217,7 +234,7 @@ constructor(
                             participant = it.participant,
                             newPermissions = it.newPermissions,
                             oldPermissions = it.oldPermissions,
-                        )
+                        ),
                     )
 
                     is ParticipantEvent.MetadataChanged -> {
@@ -226,8 +243,8 @@ constructor(
                             RoomEvent.ParticipantMetadataChanged(
                                 this@Room,
                                 it.participant,
-                                it.prevMetadata
-                            )
+                                it.prevMetadata,
+                            ),
                         )
                     }
 
@@ -236,13 +253,13 @@ constructor(
                             RoomEvent.ParticipantNameChanged(
                                 this@Room,
                                 it.participant,
-                                it.name
-                            )
+                                it.name,
+                            ),
                         )
                     }
 
                     else -> {
-                        /* do nothing */
+                        // do nothing
                     }
                 }
             }
@@ -251,13 +268,14 @@ constructor(
         state = State.CONNECTING
         connectOptions = options
 
-        if(roomOptions.e2eeOptions != null) {
-            e2eeManager = E2EEManager(roomOptions!!.e2eeOptions!!.keyProvider)
-            e2eeManager!!.setup(this, {event ->
-                coroutineScope.launch {
-                    emitWhenConnected(event)
+        if (roomOptions.e2eeOptions != null) {
+            e2eeManager = e2EEManagerFactory.create(roomOptions.e2eeOptions.keyProvider).apply {
+                setup(this@Room) { event ->
+                    coroutineScope.launch {
+                        emitWhenConnected(event)
+                    }
                 }
-            })
+            }
         }
 
         engine.join(url, token, options, roomOptions)
@@ -300,7 +318,6 @@ constructor(
      * @suppress
      */
     override fun onJoinResponse(response: LivekitRtc.JoinResponse) {
-
         LKLog.i { "Connected to server, server version: ${response.serverVersion}, client version: ${Version.CLIENT_VERSION}" }
 
         sid = Sid(response.room.sid)
@@ -349,7 +366,7 @@ constructor(
     @Synchronized
     private fun getOrCreateRemoteParticipant(
         sid: String,
-        info: LivekitModels.ParticipantInfo? = null
+        info: LivekitModels.ParticipantInfo? = null,
     ): RemoteParticipant {
         var participant = remoteParticipants[sid]
         if (participant != null) {
@@ -373,7 +390,7 @@ constructor(
                                     room = this@Room,
                                     publication = it.publication,
                                     participant = it.participant,
-                                )
+                                ),
                             )
                         }
                     }
@@ -382,8 +399,8 @@ constructor(
                         RoomEvent.TrackStreamStateChanged(
                             this@Room,
                             it.trackPublication,
-                            it.streamState
-                        )
+                            it.streamState,
+                        ),
                     )
 
                     is ParticipantEvent.TrackSubscriptionPermissionChanged -> eventBus.postEvent(
@@ -391,8 +408,8 @@ constructor(
                             this@Room,
                             it.participant,
                             it.trackPublication,
-                            it.subscriptionAllowed
-                        )
+                            it.subscriptionAllowed,
+                        ),
                     )
 
                     is ParticipantEvent.MetadataChanged -> {
@@ -401,8 +418,8 @@ constructor(
                             RoomEvent.ParticipantMetadataChanged(
                                 this@Room,
                                 it.participant,
-                                it.prevMetadata
-                            )
+                                it.prevMetadata,
+                            ),
                         )
                     }
 
@@ -412,7 +429,7 @@ constructor(
                                 this@Room,
                                 it.participant,
                                 it.name,
-                            )
+                            ),
                         )
                     }
 
@@ -422,11 +439,11 @@ constructor(
                             participant = it.participant,
                             newPermissions = it.newPermissions,
                             oldPermissions = it.oldPermissions,
-                        )
+                        ),
                     )
 
                     else -> {
-                        /* do nothing */
+                        // do nothing
                     }
                 }
             }
@@ -512,8 +529,9 @@ constructor(
      */
     private fun cleanupRoom() {
         e2eeManager?.cleanUp()
+        e2eeManager = null
         localParticipant.cleanup()
-        remoteParticipants.keys.toMutableSet()  // copy keys to avoid concurrent modifications.
+        remoteParticipants.keys.toMutableSet() // copy keys to avoid concurrent modifications.
             .forEach { sid -> handleParticipantDisconnect(sid) }
 
         sid = null
@@ -616,7 +634,7 @@ constructor(
         fun create(context: Context): Room
     }
 
-    //------------------------------------- NetworkCallback -------------------------------------//
+    // ------------------------------------- NetworkCallback -------------------------------------//
     private val networkCallback = object : ConnectivityManager.NetworkCallback() {
         /**
          * @suppress
@@ -640,7 +658,7 @@ constructor(
         }
     }
 
-    //----------------------------------- RTCEngine.Listener ------------------------------------//
+    // ----------------------------------- RTCEngine.Listener ------------------------------------//
 
     /**
      * @suppress
@@ -687,7 +705,7 @@ constructor(
             trackSid!!,
             autoManageVideo = adaptiveStream,
             statsGetter = statsGetter,
-            receiver = receiver
+            receiver = receiver,
         )
     }
 
@@ -848,7 +866,7 @@ constructor(
      */
     override fun onFullReconnecting() {
         localParticipant.prepareForFullReconnect()
-        remoteParticipants.keys.toMutableSet()  // copy keys to avoid concurrent modifications.
+        remoteParticipants.keys.toMutableSet() // copy keys to avoid concurrent modifications.
             .forEach { sid -> handleParticipantDisconnect(sid) }
     }
 
@@ -879,7 +897,7 @@ constructor(
         localParticipant.handleLocalTrackUnpublished(trackUnpublished)
     }
 
-    //------------------------------- ParticipantListener --------------------------------//
+    // ------------------------------- ParticipantListener --------------------------------//
     /**
      * This is called for both Local and Remote participants
      * @suppress
@@ -912,11 +930,12 @@ constructor(
      */
     override fun onTrackPublished(publication: LocalTrackPublication, participant: LocalParticipant) {
         listener?.onTrackPublished(publication, participant, this)
-        if(e2eeManager != null) {
+        if (e2eeManager != null) {
             e2eeManager!!.addPublishedTrack(publication.track!!, publication, participant, this)
         }
         eventBus.postEvent(RoomEvent.TrackPublished(this, publication, participant), coroutineScope)
     }
+
     /**
      * @suppress
      */
@@ -930,7 +949,7 @@ constructor(
      */
     override fun onTrackSubscribed(track: Track, publication: RemoteTrackPublication, participant: RemoteParticipant) {
         listener?.onTrackSubscribed(track, publication, participant, this)
-        if(e2eeManager != null) {
+        if (e2eeManager != null) {
             e2eeManager!!.addSubscribedTrack(track, publication, participant, this)
         }
         eventBus.postEvent(RoomEvent.TrackSubscribed(this, track, publication, participant), coroutineScope)
@@ -942,7 +961,7 @@ constructor(
     override fun onTrackSubscriptionFailed(
         sid: String,
         exception: Exception,
-        participant: RemoteParticipant
+        participant: RemoteParticipant,
     ) {
         listener?.onTrackSubscriptionFailed(sid, exception, participant, this)
         eventBus.postEvent(RoomEvent.TrackSubscriptionFailed(this, sid, exception, participant), coroutineScope)
@@ -954,7 +973,7 @@ constructor(
     override fun onTrackUnsubscribed(
         track: Track,
         publication: RemoteTrackPublication,
-        participant: RemoteParticipant
+        participant: RemoteParticipant,
     ) {
         listener?.onTrackUnsubscribed(track, publication, participant, this)
         eventBus.postEvent(RoomEvent.TrackUnsubscribed(this, track, publication, participant), coroutineScope)
@@ -966,7 +985,7 @@ constructor(
     fun initVideoRenderer(viewRenderer: SurfaceViewRenderer) {
         viewRenderer.init(eglBase.eglBaseContext, null)
         viewRenderer.setScalingType(RendererCommon.ScalingType.SCALE_ASPECT_FIT)
-        viewRenderer.setEnableHardwareScaler(false /* enabled */)
+        viewRenderer.setEnableHardwareScaler(false)
     }
 
     /**
@@ -975,7 +994,7 @@ constructor(
     fun initVideoRenderer(viewRenderer: TextureViewRenderer) {
         viewRenderer.init(eglBase.eglBaseContext, null)
         viewRenderer.setScalingType(RendererCommon.ScalingType.SCALE_ASPECT_FIT)
-        viewRenderer.setEnableHardwareScaler(false /* enabled */)
+        viewRenderer.setEnableHardwareScaler(false)
     }
 
     private suspend fun emitWhenConnected(event: RoomEvent) {

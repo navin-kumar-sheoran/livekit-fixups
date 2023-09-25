@@ -1,3 +1,19 @@
+/*
+ * Copyright 2023 LiveKit, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package io.livekit.android.composesample
 
 import android.app.Activity
@@ -31,6 +47,7 @@ import io.livekit.android.composesample.ui.theme.AppTheme
 import io.livekit.android.room.Room
 import io.livekit.android.room.participant.Participant
 import io.livekit.android.sample.CallViewModel
+import io.livekit.android.sample.common.R
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.parcelize.Parcelize
@@ -40,12 +57,18 @@ class CallActivity : AppCompatActivity() {
     private val viewModel: CallViewModel by viewModelByFactory {
         val args = intent.getParcelableExtra<BundleArgs>(KEY_ARGS)
             ?: throw NullPointerException("args is null!")
-        CallViewModel(args.url, args.token, application)
+        CallViewModel(
+            url = args.url,
+            token = args.token,
+            e2ee = args.e2eeOn,
+            e2eeKey = args.e2eeKey,
+            application = application,
+        )
     }
 
     private val screenCaptureIntentLauncher =
         registerForActivityResult(
-            ActivityResultContracts.StartActivityForResult()
+            ActivityResultContracts.StartActivityForResult(),
         ) { result ->
             val resultCode = result.resultCode
             val data = result.data
@@ -55,11 +78,10 @@ class CallActivity : AppCompatActivity() {
             viewModel.startScreenCapture(data)
         }
 
-
     @OptIn(ExperimentalMaterialApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
         // Setup compose view.
         setContent {
@@ -141,24 +163,26 @@ class CallActivity : AppCompatActivity() {
             ConstraintLayout(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(MaterialTheme.colors.background)
+                    .background(MaterialTheme.colors.background),
             ) {
                 val (speakerView, audienceRow, buttonBar) = createRefs()
 
                 // Primary speaker view
-                Surface(modifier = Modifier.constrainAs(speakerView) {
-                    top.linkTo(parent.top)
-                    start.linkTo(parent.start)
-                    end.linkTo(parent.end)
-                    bottom.linkTo(audienceRow.top)
-                    width = Dimension.fillToConstraints
-                    height = Dimension.fillToConstraints
-                }) {
+                Surface(
+                    modifier = Modifier.constrainAs(speakerView) {
+                        top.linkTo(parent.top)
+                        start.linkTo(parent.start)
+                        end.linkTo(parent.end)
+                        bottom.linkTo(audienceRow.top)
+                        width = Dimension.fillToConstraints
+                        height = Dimension.fillToConstraints
+                    },
+                ) {
                     if (room != null && primarySpeaker != null) {
                         ParticipantItem(
                             room = room,
                             participant = primarySpeaker,
-                            isSpeaking = activeSpeakers.contains(primarySpeaker)
+                            isSpeaking = activeSpeakers.contains(primarySpeaker),
                         )
                     }
                 }
@@ -173,12 +197,12 @@ class CallActivity : AppCompatActivity() {
                             end.linkTo(parent.end)
                             width = Dimension.fillToConstraints
                             height = Dimension.value(120.dp)
-                        }
+                        },
                 ) {
                     if (room != null) {
                         items(
                             count = participants.size,
-                            key = { index -> participants[index].sid }
+                            key = { index -> participants[index].sid },
                         ) { index ->
                             ParticipantItem(
                                 room = room,
@@ -186,7 +210,7 @@ class CallActivity : AppCompatActivity() {
                                 isSpeaking = activeSpeakers.contains(participants[index]),
                                 modifier = Modifier
                                     .fillMaxHeight()
-                                    .aspectRatio(1.0f, true)
+                                    .aspectRatio(1.0f, true),
                             )
                         }
                     }
@@ -203,7 +227,7 @@ class CallActivity : AppCompatActivity() {
                             height = Dimension.wrapContent
                         },
                     verticalArrangement = Arrangement.SpaceEvenly,
-                    horizontalAlignment = Alignment.CenterHorizontally
+                    horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
 
                     val controlSize = 40.dp
@@ -217,7 +241,7 @@ class CallActivity : AppCompatActivity() {
                             onClick = { viewModel.setMicEnabled(!micEnabled) },
                             modifier = Modifier
                                 .size(controlSize)
-                                .padding(controlPadding)
+                                .padding(controlPadding),
                         ) {
                             val resource =
                                 if (micEnabled) R.drawable.outline_mic_24 else R.drawable.outline_mic_off_24
@@ -231,7 +255,7 @@ class CallActivity : AppCompatActivity() {
                             onClick = { viewModel.setCameraEnabled(!videoEnabled) },
                             modifier = Modifier
                                 .size(controlSize)
-                                .padding(controlPadding)
+                                .padding(controlPadding),
                         ) {
                             val resource =
                                 if (videoEnabled) R.drawable.outline_videocam_24 else R.drawable.outline_videocam_off_24
@@ -245,7 +269,7 @@ class CallActivity : AppCompatActivity() {
                             onClick = { viewModel.flipCamera() },
                             modifier = Modifier
                                 .size(controlSize)
-                                .padding(controlPadding)
+                                .padding(controlPadding),
                         ) {
                             Icon(
                                 painterResource(id = R.drawable.outline_flip_camera_android_24),
@@ -263,7 +287,7 @@ class CallActivity : AppCompatActivity() {
                             },
                             modifier = Modifier
                                 .size(controlSize)
-                                .padding(controlPadding)
+                                .padding(controlPadding),
                         ) {
                             val resource =
                                 if (screencastEnabled) R.drawable.baseline_cast_connected_24 else R.drawable.baseline_cast_24
@@ -280,7 +304,7 @@ class CallActivity : AppCompatActivity() {
                             onClick = { showMessageDialog = true },
                             modifier = Modifier
                                 .size(controlSize)
-                                .padding(controlPadding)
+                                .padding(controlPadding),
                         ) {
                             Icon(
                                 painterResource(id = R.drawable.baseline_chat_24),
@@ -312,7 +336,7 @@ class CallActivity : AppCompatActivity() {
                                             onSendMessage(messageToSend)
                                             showMessageDialog = false
                                             messageToSend = ""
-                                        }
+                                        },
                                     ) { Text("Send") }
                                 },
                                 dismissButton = {
@@ -320,7 +344,7 @@ class CallActivity : AppCompatActivity() {
                                         onClick = {
                                             showMessageDialog = false
                                             messageToSend = ""
-                                        }
+                                        },
                                     ) { Text("Cancel") }
                                 },
                                 backgroundColor = Color.Black,
@@ -330,7 +354,7 @@ class CallActivity : AppCompatActivity() {
                             onClick = { onExitClick() },
                             modifier = Modifier
                                 .size(controlSize)
-                                .padding(controlPadding)
+                                .padding(controlPadding),
                         ) {
                             Icon(
                                 painterResource(id = R.drawable.ic_baseline_cancel_24),
@@ -352,7 +376,7 @@ class CallActivity : AppCompatActivity() {
                             onClick = { showAudioDeviceDialog = true },
                             modifier = Modifier
                                 .size(controlSize)
-                                .padding(controlPadding)
+                                .padding(controlPadding),
                         ) {
                             val resource = R.drawable.volume_up_48px
                             Icon(
@@ -366,14 +390,14 @@ class CallActivity : AppCompatActivity() {
                                 onDismissRequest = { showAudioDeviceDialog = false },
                                 selectDevice = { audioSwitchHandler?.selectDevice(it) },
                                 currentDevice = audioSwitchHandler?.selectedAudioDevice,
-                                availableDevices = audioSwitchHandler?.availableAudioDevices ?: emptyList()
+                                availableDevices = audioSwitchHandler?.availableAudioDevices ?: emptyList(),
                             )
                         }
                         Surface(
                             onClick = { viewModel.toggleSubscriptionPermissions() },
                             modifier = Modifier
                                 .size(controlSize)
-                                .padding(controlPadding)
+                                .padding(controlPadding),
                         ) {
                             val resource =
                                 if (permissionAllowed) R.drawable.account_cancel_outline else R.drawable.account_cancel
@@ -389,7 +413,7 @@ class CallActivity : AppCompatActivity() {
                             onClick = { showDebugDialog = true },
                             modifier = Modifier
                                 .size(controlSize)
-                                .padding(controlPadding)
+                                .padding(controlPadding),
                         ) {
                             val resource = R.drawable.dots_horizontal_circle_outline
                             Icon(
@@ -423,7 +447,7 @@ class CallActivity : AppCompatActivity() {
                                     scope.launch {
                                         scaffoldState.snackbarHostState.showSnackbar(error?.toString() ?: "")
                                     }
-                                }
+                                },
                             )
                         },
                         content = { innerPadding ->
@@ -432,9 +456,9 @@ class CallActivity : AppCompatActivity() {
                                 modifier = Modifier
                                     .padding(innerPadding)
                                     .fillMaxSize()
-                                    .wrapContentSize()
+                                    .wrapContentSize(),
                             )
-                        }
+                        },
                     )
                 }
             }
@@ -446,5 +470,10 @@ class CallActivity : AppCompatActivity() {
     }
 
     @Parcelize
-    data class BundleArgs(val url: String, val token: String) : Parcelable
+    data class BundleArgs(
+        val url: String,
+        val token: String,
+        val e2eeKey: String,
+        val e2eeOn: Boolean,
+    ) : Parcelable
 }

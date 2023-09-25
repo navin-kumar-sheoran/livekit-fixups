@@ -20,7 +20,11 @@ limitations under the License.
 Original repo can be found at: https://github.com/ajalt/LKLogkt
  */
 
-internal class LKLog {
+/**
+ * @suppress
+ */
+@Suppress("NOTHING_TO_INLINE", "unused")
+class LKLog {
 
     companion object {
         var loggingLevel = OFF
@@ -75,7 +79,7 @@ internal class LKLog {
         inline fun wtf(t: Throwable?) = log(WTF) { Timber.wtf(t) }
 
         /** @suppress */
-        internal inline fun log(loggingLevel: LoggingLevel, block: () -> Unit) {
+        inline fun log(loggingLevel: LoggingLevel, block: () -> Unit) {
             if (loggingLevel >= LKLog.loggingLevel && Timber.treeCount() > 0) block()
         }
     }

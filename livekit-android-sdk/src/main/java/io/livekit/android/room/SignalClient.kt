@@ -633,6 +633,9 @@ constructor(
             LivekitRtc.SignalResponse.MessageCase.RECONNECT -> {
                 // TODO
             }
+            LivekitRtc.SignalResponse.MessageCase.SUBSCRIPTION_RESPONSE -> {
+                // TODO
+            }
 
             LivekitRtc.SignalResponse.MessageCase.MESSAGE_NOT_SET,
             null -> {

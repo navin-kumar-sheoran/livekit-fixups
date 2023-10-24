@@ -9,7 +9,8 @@ import io.livekit.android.LiveKit
 import io.livekit.android.memory.CloseableManager
 import io.livekit.android.util.LKLog
 import io.livekit.android.util.LoggingLevel
-import io.livekit.android.webrtc.SimulcastVideoEncoderFactoryWrapper
+import io.livekit.android.webrtc.CustomVideoDecoderFactory
+import io.livekit.android.webrtc.CustomVideoEncoderFactory
 import org.webrtc.*
 import org.webrtc.audio.AudioDeviceModule
 import org.webrtc.audio.JavaAudioDeviceModule
@@ -169,7 +170,7 @@ object RTCModule {
         videoEncoderFactoryOverride: VideoEncoderFactory?
     ): VideoEncoderFactory {
         return videoEncoderFactoryOverride ?: if (videoHwAccel) {
-            SimulcastVideoEncoderFactoryWrapper(
+            CustomVideoEncoderFactory(
                 eglContext,
                 enableIntelVp8Encoder = true,
                 enableH264HighProfile = false,
@@ -192,7 +193,7 @@ object RTCModule {
         videoDecoderFactoryOverride: VideoDecoderFactory?
     ): VideoDecoderFactory {
         return videoDecoderFactoryOverride ?: if (videoHwAccel) {
-            WrappedVideoDecoderFactory(eglContext)
+            CustomVideoDecoderFactory(eglContext)
         } else {
             SoftwareVideoDecoderFactory()
         }

@@ -11,7 +11,15 @@ import io.livekit.android.util.LKLog
 import io.livekit.android.util.LoggingLevel
 import io.livekit.android.webrtc.CustomVideoDecoderFactory
 import io.livekit.android.webrtc.CustomVideoEncoderFactory
-import org.webrtc.*
+import org.webrtc.EglBase
+import org.webrtc.Logging
+import org.webrtc.MediaStreamTrack
+import org.webrtc.PeerConnectionFactory
+import org.webrtc.RtpCapabilities
+import org.webrtc.SoftwareVideoDecoderFactory
+import org.webrtc.SoftwareVideoEncoderFactory
+import org.webrtc.VideoDecoderFactory
+import org.webrtc.VideoEncoderFactory
 import org.webrtc.audio.AudioDeviceModule
 import org.webrtc.audio.JavaAudioDeviceModule
 import timber.log.Timber
@@ -36,24 +44,27 @@ object RTCModule {
         PeerConnectionFactory.initialize(
             PeerConnectionFactory.InitializationOptions
                 .builder(appContext)
-                .setInjectableLogger({ s, severity, s2 ->
-                    if (!LiveKit.enableWebRTCLogging) {
-                        return@setInjectableLogger
-                    }
+                .setInjectableLogger(
+                    { s, severity, s2 ->
+                        if (!LiveKit.enableWebRTCLogging) {
+                            return@setInjectableLogger
+                        }
 
-                    val loggingLevel = when (severity) {
-                        Logging.Severity.LS_VERBOSE -> LoggingLevel.VERBOSE
-                        Logging.Severity.LS_INFO -> LoggingLevel.INFO
-                        Logging.Severity.LS_WARNING -> LoggingLevel.WARN
-                        Logging.Severity.LS_ERROR -> LoggingLevel.ERROR
-                        else -> LoggingLevel.OFF
-                    }
+                        val loggingLevel = when (severity) {
+                            Logging.Severity.LS_VERBOSE -> LoggingLevel.VERBOSE
+                            Logging.Severity.LS_INFO -> LoggingLevel.INFO
+                            Logging.Severity.LS_WARNING -> LoggingLevel.WARN
+                            Logging.Severity.LS_ERROR -> LoggingLevel.ERROR
+                            else -> LoggingLevel.OFF
+                        }
 
-                    LKLog.log(loggingLevel) {
-                        Timber.log(loggingLevel.toAndroidLogPriority(), "$s2: $s")
-                    }
-                }, Logging.Severity.LS_VERBOSE)
-                .createInitializationOptions()
+                        LKLog.log(loggingLevel) {
+                            Timber.log(loggingLevel.toAndroidLogPriority(), "$s2: $s")
+                        }
+                    },
+                    Logging.Severity.LS_VERBOSE,
+                )
+                .createInitializationOptions(),
         )
         return LibWebrtcInitialization
     }
@@ -68,7 +79,8 @@ object RTCModule {
         @Named(InjectionNames.OVERRIDE_JAVA_AUDIO_DEVICE_MODULE_CUSTOMIZER)
         @Nullable
         moduleCustomizer: ((builder: JavaAudioDeviceModule.Builder) -> Unit)?,
-        appContext: Context
+        appContext: Context,
+        closeableManager: CloseableManager,
     ): AudioDeviceModule {
         if (audioDeviceModuleOverride != null) {
             return audioDeviceModuleOverride
@@ -143,11 +155,14 @@ object RTCModule {
 
         moduleCustomizer?.invoke(builder)
         return builder.createAudioDeviceModule()
+            .apply { closeableManager.registerClosable { release() } }
     }
 
     @Provides
     @Singleton
-    fun eglBase(@Singleton memoryManager: CloseableManager): EglBase {
+    fun eglBase(
+        memoryManager: CloseableManager,
+    ): EglBase {
         val eglBase = EglBase.create()
         memoryManager.registerResource(eglBase) { eglBase.release() }
 
@@ -167,7 +182,7 @@ object RTCModule {
         eglContext: EglBase.Context,
         @Named(InjectionNames.OVERRIDE_VIDEO_ENCODER_FACTORY)
         @Nullable
-        videoEncoderFactoryOverride: VideoEncoderFactory?
+        videoEncoderFactoryOverride: VideoEncoderFactory?,
     ): VideoEncoderFactory {
         return videoEncoderFactoryOverride ?: if (videoHwAccel) {
             CustomVideoEncoderFactory(
@@ -190,7 +205,7 @@ object RTCModule {
         eglContext: EglBase.Context,
         @Named(InjectionNames.OVERRIDE_VIDEO_DECODER_FACTORY)
         @Nullable
-        videoDecoderFactoryOverride: VideoDecoderFactory?
+        videoDecoderFactoryOverride: VideoDecoderFactory?,
     ): VideoDecoderFactory {
         return videoDecoderFactoryOverride ?: if (videoHwAccel) {
             CustomVideoDecoderFactory(eglContext)
@@ -208,12 +223,14 @@ object RTCModule {
         audioDeviceModule: AudioDeviceModule,
         videoEncoderFactory: VideoEncoderFactory,
         videoDecoderFactory: VideoDecoderFactory,
+        memoryManager: CloseableManager,
     ): PeerConnectionFactory {
         return PeerConnectionFactory.builder()
             .setAudioDeviceModule(audioDeviceModule)
             .setVideoEncoderFactory(videoEncoderFactory)
             .setVideoDecoderFactory(videoDecoderFactory)
             .createPeerConnectionFactory()
+            .apply { memoryManager.registerClosable { dispose() } }
     }
 
     @Provides

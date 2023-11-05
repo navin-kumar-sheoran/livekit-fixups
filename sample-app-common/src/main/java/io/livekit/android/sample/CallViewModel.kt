@@ -132,7 +132,7 @@ class CallViewModel(
                         handlePrimarySpeaker(
                             participantsList,
                             speakers,
-                            room
+                            room,
                         )
                     }
             }
@@ -147,6 +147,7 @@ class CallViewModel(
                             messagesReceived++
                             Timber.e { "message received from $identity, count $messagesReceived" }
                         }
+
                         else -> {
                             Timber.e { "Room event: $it" }
                         }
@@ -189,7 +190,7 @@ class CallViewModel(
             room.connect(
                 url = url,
                 token = token,
-                roomOptions = RoomOptions(e2eeOptions = getE2EEOptions())
+                roomOptions = RoomOptions(e2eeOptions = getE2EEOptions()),
             )
 
             // Create and publish audio/video tracks
@@ -254,7 +255,7 @@ class CallViewModel(
             val screencastTrack =
                 localParticipant.createScreencastTrack(mediaProjectionPermissionResultData = mediaProjectionPermissionResultData)
             localParticipant.publishVideoTrack(
-                screencastTrack
+                screencastTrack,
             )
 
             // Must start the foreground prior to startCapture.
@@ -278,6 +279,8 @@ class CallViewModel(
 
     override fun onCleared() {
         super.onCleared()
+
+        // Make sure to release any resources associated with LiveKit
         room.disconnect()
         room.release()
 

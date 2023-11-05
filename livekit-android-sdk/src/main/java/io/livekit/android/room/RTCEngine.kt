@@ -5,7 +5,6 @@ import com.google.protobuf.ByteString
 import io.livekit.android.ConnectOptions
 import io.livekit.android.RoomOptions
 import io.livekit.android.dagger.InjectionNames
-import io.livekit.android.e2ee.E2EEOptions
 import io.livekit.android.events.DisconnectReason
 import io.livekit.android.events.convert
 import io.livekit.android.room.participant.ParticipantTrackPermission
@@ -20,15 +19,27 @@ import io.livekit.android.webrtc.copy
 import io.livekit.android.webrtc.isConnected
 import io.livekit.android.webrtc.isDisconnected
 import io.livekit.android.webrtc.toProtoSessionDescription
-import kotlinx.coroutines.*
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import livekit.LivekitModels
-import livekit.LivekitModels.Encryption
 import livekit.LivekitRtc
 import livekit.LivekitRtc.JoinResponse
 import livekit.LivekitRtc.ReconnectResponse
-import org.webrtc.*
+import org.webrtc.DataChannel
+import org.webrtc.IceCandidate
+import org.webrtc.MediaConstraints
+import org.webrtc.MediaStream
+import org.webrtc.MediaStreamTrack
+import org.webrtc.PeerConnection
 import org.webrtc.PeerConnection.RTCConfiguration
+import org.webrtc.RTCStatsCollectorCallback
+import org.webrtc.RTCStatsReport
+import org.webrtc.RtpReceiver
+import org.webrtc.SessionDescription
 import java.net.ConnectException
 import java.nio.ByteBuffer
 import javax.inject.Inject
@@ -300,13 +311,19 @@ internal constructor(
         _publisher = null
         _subscriber?.close()
         _subscriber = null
-        reliableDataChannel?.close()
+
+        fun DataChannel?.completeDispose() {
+            this?.unregisterObserver()
+            this?.close()
+            this?.dispose()
+        }
+        reliableDataChannel?.completeDispose()
         reliableDataChannel = null
-        reliableDataChannelSub?.close()
+        reliableDataChannelSub?.completeDispose()
         reliableDataChannelSub = null
-        lossyDataChannel?.close()
+        lossyDataChannel?.completeDispose()
         lossyDataChannel = null
-        lossyDataChannelSub?.close()
+        lossyDataChannelSub?.completeDispose()
         lossyDataChannelSub = null
         isSubscriberPrimary = false
         client.close(reason = reason)

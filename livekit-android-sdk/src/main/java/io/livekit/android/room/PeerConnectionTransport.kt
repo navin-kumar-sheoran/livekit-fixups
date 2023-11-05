@@ -4,7 +4,11 @@ import dagger.assisted.Assisted
 import dagger.assisted.AssistedFactory
 import dagger.assisted.AssistedInject
 import io.livekit.android.dagger.InjectionNames
-import io.livekit.android.room.util.*
+import io.livekit.android.room.util.MediaConstraintKeys
+import io.livekit.android.room.util.createOffer
+import io.livekit.android.room.util.findConstraint
+import io.livekit.android.room.util.setLocalDescription
+import io.livekit.android.room.util.setRemoteDescription
 import io.livekit.android.util.Either
 import io.livekit.android.util.LKLog
 import io.livekit.android.util.debounce
@@ -14,8 +18,12 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import org.webrtc.*
+import org.webrtc.IceCandidate
+import org.webrtc.MediaConstraints
+import org.webrtc.PeerConnection
 import org.webrtc.PeerConnection.RTCConfiguration
+import org.webrtc.PeerConnectionFactory
+import org.webrtc.SessionDescription
 import javax.inject.Named
 
 /**
@@ -135,7 +143,7 @@ constructor(
     }
 
     fun close() {
-        peerConnection.close()
+        peerConnection.dispose()
     }
 
     fun updateRTCConfig(config: RTCConfiguration) {

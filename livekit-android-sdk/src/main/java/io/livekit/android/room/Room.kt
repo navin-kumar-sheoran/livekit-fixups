@@ -33,23 +33,49 @@ import io.livekit.android.Version
 import io.livekit.android.audio.AudioHandler
 import io.livekit.android.dagger.InjectionNames
 import io.livekit.android.e2ee.E2EEManager
-import io.livekit.android.events.*
+import io.livekit.android.events.BroadcastEventBus
+import io.livekit.android.events.DisconnectReason
+import io.livekit.android.events.ParticipantEvent
+import io.livekit.android.events.RoomEvent
+import io.livekit.android.events.collect
 import io.livekit.android.memory.CloseableManager
 import io.livekit.android.renderer.TextureViewRenderer
-import io.livekit.android.room.participant.*
-import io.livekit.android.room.track.*
+import io.livekit.android.room.participant.AudioTrackPublishDefaults
+import io.livekit.android.room.participant.ConnectionQuality
+import io.livekit.android.room.participant.LocalParticipant
+import io.livekit.android.room.participant.Participant
+import io.livekit.android.room.participant.ParticipantListener
+import io.livekit.android.room.participant.RemoteParticipant
+import io.livekit.android.room.participant.VideoTrackPublishDefaults
+import io.livekit.android.room.participant.publishTracksInfo
+import io.livekit.android.room.track.LocalAudioTrackOptions
+import io.livekit.android.room.track.LocalTrackPublication
+import io.livekit.android.room.track.LocalVideoTrackOptions
+import io.livekit.android.room.track.RemoteTrackPublication
+import io.livekit.android.room.track.Track
+import io.livekit.android.room.track.TrackPublication
 import io.livekit.android.util.FlowObservable
 import io.livekit.android.util.LKLog
 import io.livekit.android.util.flowDelegate
 import io.livekit.android.util.invoke
 import io.livekit.android.webrtc.createStatsGetter
 import io.livekit.android.webrtc.getFilteredStats
-import kotlinx.coroutines.*
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import livekit.LivekitModels
 import livekit.LivekitRtc
-import org.webrtc.*
+import org.webrtc.EglBase
+import org.webrtc.MediaStream
+import org.webrtc.MediaStreamTrack
+import org.webrtc.RTCStatsCollectorCallback
+import org.webrtc.RendererCommon
+import org.webrtc.RtpReceiver
+import org.webrtc.SurfaceViewRenderer
 import javax.inject.Named
-import javax.inject.Singleton
 
 class Room
 @AssistedInject
@@ -64,7 +90,6 @@ constructor(
     @Named(InjectionNames.DISPATCHER_IO)
     private val ioDispatcher: CoroutineDispatcher,
     val audioHandler: AudioHandler,
-    @Singleton
     private val closeableManager: CloseableManager,
     private val e2EEManagerFactory: E2EEManager.Factory,
 ) : RTCEngine.Listener, ParticipantListener {

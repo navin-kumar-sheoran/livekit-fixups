@@ -1,6 +1,23 @@
+/*
+ * Copyright 2023 LiveKit, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package io.livekit.android.dagger
 
 import android.content.Context
+import android.javax.sdp.SdpFactory
 import android.os.Build
 import androidx.annotation.Nullable
 import dagger.Module
@@ -11,15 +28,7 @@ import io.livekit.android.util.LKLog
 import io.livekit.android.util.LoggingLevel
 import io.livekit.android.webrtc.CustomVideoDecoderFactory
 import io.livekit.android.webrtc.CustomVideoEncoderFactory
-import org.webrtc.EglBase
-import org.webrtc.Logging
-import org.webrtc.MediaStreamTrack
-import org.webrtc.PeerConnectionFactory
-import org.webrtc.RtpCapabilities
-import org.webrtc.SoftwareVideoDecoderFactory
-import org.webrtc.SoftwareVideoEncoderFactory
-import org.webrtc.VideoDecoderFactory
-import org.webrtc.VideoEncoderFactory
+import org.webrtc.*
 import org.webrtc.audio.AudioDeviceModule
 import org.webrtc.audio.JavaAudioDeviceModule
 import timber.log.Timber
@@ -94,7 +103,7 @@ object RTCModule {
 
             override fun onWebRtcAudioRecordStartError(
                 errorCode: JavaAudioDeviceModule.AudioRecordStartErrorCode?,
-                errorMessage: String?
+                errorMessage: String?,
             ) {
                 LKLog.e { "onWebRtcAudioRecordStartError: $errorCode. $errorMessage" }
             }
@@ -111,7 +120,7 @@ object RTCModule {
 
             override fun onWebRtcAudioTrackStartError(
                 errorCode: JavaAudioDeviceModule.AudioTrackStartErrorCode?,
-                errorMessage: String?
+                errorMessage: String?,
             ) {
                 LKLog.e { "onWebRtcAudioTrackStartError: $errorCode. $errorMessage" }
             }
@@ -145,6 +154,7 @@ object RTCModule {
         }
 
         val useHardwareAudioProcessing = Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q
+
         val builder = JavaAudioDeviceModule.builder(appContext)
             .setUseHardwareAcousticEchoCanceler(useHardwareAudioProcessing)
             .setUseHardwareNoiseSuppressor(useHardwareAudioProcessing)
@@ -244,6 +254,9 @@ object RTCModule {
     @Provides
     @Named(InjectionNames.OPTIONS_VIDEO_HW_ACCEL)
     fun videoHwAccel() = true
+
+    @Provides
+    fun sdpFactory() = SdpFactory.getInstance()
 }
 
 /**

@@ -7,6 +7,7 @@ import io.livekit.android.events.ParticipantEvent
 import io.livekit.android.events.RoomEvent
 import io.livekit.android.mock.MockAudioStreamTrack
 import io.livekit.android.mock.MockEglBase
+import io.livekit.android.mock.MockPeerConnection
 import io.livekit.android.mock.MockVideoCapturer
 import io.livekit.android.mock.MockVideoStreamTrack
 import io.livekit.android.room.DefaultsManager
@@ -15,11 +16,18 @@ import io.livekit.android.room.track.LocalAudioTrack
 import io.livekit.android.room.track.LocalVideoTrack
 import io.livekit.android.room.track.LocalVideoTrackOptions
 import io.livekit.android.room.track.VideoCaptureParameter
+import io.livekit.android.room.track.VideoCodec
 import io.livekit.android.util.toOkioByteString
 import io.livekit.android.util.toPBByteString
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import livekit.LivekitModels
 import livekit.LivekitRtc
-import org.junit.Assert.*
+import livekit.LivekitRtc.SubscribedCodec
+import livekit.LivekitRtc.SubscribedQuality
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.mockito.Mockito
@@ -39,8 +47,8 @@ class LocalParticipantMockE2ETest : MockE2ETest() {
         room.localParticipant.publishAudioTrack(
             LocalAudioTrack(
                 "",
-                MockAudioStreamTrack(id = SignalClientTest.LOCAL_TRACK_PUBLISHED.trackPublished.cid)
-            )
+                MockAudioStreamTrack(id = SignalClientTest.LOCAL_TRACK_PUBLISHED.trackPublished.cid),
+            ),
         )
 
         room.disconnect()
@@ -102,7 +110,7 @@ class LocalParticipantMockE2ETest : MockE2ETest() {
 
         wsFactory.listener.onMessage(
             wsFactory.ws,
-            SignalClientTest.LOCAL_PARTICIPANT_METADATA_CHANGED.toOkioByteString()
+            SignalClientTest.LOCAL_PARTICIPANT_METADATA_CHANGED.toOkioByteString(),
         )
 
         val roomEvents = roomEventsCollector.stopCollecting()
@@ -118,7 +126,7 @@ class LocalParticipantMockE2ETest : MockE2ETest() {
                 RoomEvent.ParticipantMetadataChanged::class.java,
                 RoomEvent.ParticipantNameChanged::class.java,
             ),
-            roomEvents
+            roomEvents,
         )
 
         assertIsClassList(
@@ -126,7 +134,7 @@ class LocalParticipantMockE2ETest : MockE2ETest() {
                 ParticipantEvent.MetadataChanged::class.java,
                 ParticipantEvent.NameChanged::class.java,
             ),
-            participantEvents
+            participantEvents,
         )
     }
 
@@ -138,14 +146,14 @@ class LocalParticipantMockE2ETest : MockE2ETest() {
             isScreencast = false,
             deviceId = null,
             position = null,
-            captureParams = VideoCaptureParameter(width = 0, height = 0, maxFps = 0)
+            captureParams = VideoCaptureParameter(width = 0, height = 0, maxFps = 0),
         ),
         rtcTrack = MockVideoStreamTrack(),
         peerConnectionFactory = component.peerConnectionFactory(),
         context = context,
         eglBase = MockEglBase(),
         defaultsManager = DefaultsManager(),
-        trackFactory = mock(LocalVideoTrack.Factory::class.java)
+        trackFactory = mock(LocalVideoTrack.Factory::class.java),
     )
 
     @Test
@@ -158,11 +166,13 @@ class LocalParticipantMockE2ETest : MockE2ETest() {
         val peerConnection = component.rtcEngine().publisher.peerConnection
         val transceiver = peerConnection.transceivers.first()
 
-        Mockito.verify(transceiver).setCodecPreferences(argThat { codecs ->
-            val preferredCodec = codecs.first()
-            return@argThat preferredCodec.name.lowercase() == "h264" &&
+        Mockito.verify(transceiver).setCodecPreferences(
+            argThat { codecs ->
+                val preferredCodec = codecs.first()
+                return@argThat preferredCodec.name.lowercase() == "h264" &&
                     preferredCodec.parameters["profile-level-id"] == "42e01f"
-        })
+            },
+        )
     }
 
     @Test
@@ -175,9 +185,115 @@ class LocalParticipantMockE2ETest : MockE2ETest() {
         val peerConnection = component.rtcEngine().publisher.peerConnection
         val transceiver = peerConnection.transceivers.first()
 
-        Mockito.verify(transceiver).setCodecPreferences(argThat { codecs ->
-            val preferredCodec = codecs.first()
-            return@argThat preferredCodec.name.lowercase() == "vp8"
-        })
+        Mockito.verify(transceiver).setCodecPreferences(
+            argThat { codecs ->
+                val preferredCodec = codecs.first()
+                return@argThat preferredCodec.name.lowercase() == "vp8"
+            },
+        )
+    }
+
+    @Test
+    fun publishSvcCodec() = runTest {
+        room.videoTrackPublishDefaults = room.videoTrackPublishDefaults.copy(
+            videoCodec = VideoCodec.VP9.codecName,
+            scalabilityMode = "L3T3",
+            backupCodec = BackupVideoCodec(codec = VideoCodec.VP8.codecName),
+        )
+
+        connect()
+        wsFactory.ws.clearRequests()
+        room.localParticipant.publishVideoTrack(track = createLocalTrack())
+
+        // Expect add track request to contain both primary and backup
+        assertEquals(1, wsFactory.ws.sentRequests.size)
+
+        val requestString = wsFactory.ws.sentRequests[0]
+        val signalRequest = LivekitRtc.SignalRequest.newBuilder()
+            .mergeFrom(requestString.toPBByteString())
+            .build()
+        assertTrue(signalRequest.hasAddTrack())
+
+        val addTrackRequest = signalRequest.addTrack
+        assertEquals(2, addTrackRequest.simulcastCodecsList.size)
+
+        val vp9Codec = addTrackRequest.simulcastCodecsList[0]
+        assertEquals("vp9", vp9Codec.codec)
+
+        val vp8Codec = addTrackRequest.simulcastCodecsList[1]
+        assertEquals("vp8", vp8Codec.codec)
+
+        val publisherConn = component.rtcEngine().publisher.peerConnection as MockPeerConnection
+
+        assertEquals(1, publisherConn.transceivers.size)
+        Mockito.verify(publisherConn.transceivers.first()).setCodecPreferences(
+            argThat { codecs ->
+                val preferredCodec = codecs.first()
+                return@argThat preferredCodec.name.lowercase() == "vp9"
+            },
+        )
+
+        // Ensure the newly subscribed vp8 codec gets added as a new transceiver.
+        wsFactory.receiveMessage(
+            with(LivekitRtc.SignalResponse.newBuilder()) {
+                subscribedQualityUpdate = with(LivekitRtc.SubscribedQualityUpdate.newBuilder()) {
+                    trackSid = room.localParticipant.videoTracks.first().first.sid
+                    addAllSubscribedCodecs(
+                        listOf(
+                            with(SubscribedCodec.newBuilder()) {
+                                codec = "vp9"
+                                addAllQualities(
+                                    listOf(
+                                        SubscribedQuality.newBuilder()
+                                            .setQuality(LivekitModels.VideoQuality.HIGH)
+                                            .setEnabled(true)
+                                            .build(),
+                                        SubscribedQuality.newBuilder()
+                                            .setQuality(LivekitModels.VideoQuality.MEDIUM)
+                                            .setEnabled(true)
+                                            .build(),
+                                        SubscribedQuality.newBuilder()
+                                            .setQuality(LivekitModels.VideoQuality.LOW)
+                                            .setEnabled(true)
+                                            .build(),
+                                    ),
+                                )
+                                build()
+                            },
+                            with(SubscribedCodec.newBuilder()) {
+                                codec = "vp8"
+                                addAllQualities(
+                                    listOf(
+                                        SubscribedQuality.newBuilder()
+                                            .setQuality(LivekitModels.VideoQuality.HIGH)
+                                            .setEnabled(true)
+                                            .build(),
+                                        SubscribedQuality.newBuilder()
+                                            .setQuality(LivekitModels.VideoQuality.MEDIUM)
+                                            .setEnabled(true)
+                                            .build(),
+                                        SubscribedQuality.newBuilder()
+                                            .setQuality(LivekitModels.VideoQuality.LOW)
+                                            .setEnabled(true)
+                                            .build(),
+                                    ),
+                                )
+                                build()
+                            },
+                        ),
+                    )
+                    build()
+                }
+                build().toOkioByteString()
+            },
+        )
+
+        assertEquals(2, publisherConn.transceivers.size)
+        Mockito.verify(publisherConn.transceivers.last()).setCodecPreferences(
+            argThat { codecs ->
+                val preferredCodec = codecs.first()
+                return@argThat preferredCodec.name.lowercase() == "vp8"
+            },
+        )
     }
 }

@@ -12,8 +12,15 @@ import io.livekit.android.util.CloseableCoroutineScope
 import io.livekit.android.util.Either
 import io.livekit.android.util.LKLog
 import io.livekit.android.webrtc.toProtoSessionDescription
-import kotlinx.coroutines.*
+import kotlinx.coroutines.CancellableContinuation
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -21,13 +28,17 @@ import livekit.LivekitModels
 import livekit.LivekitRtc
 import livekit.LivekitRtc.JoinResponse
 import livekit.LivekitRtc.ReconnectResponse
-import okhttp3.*
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.Response
+import okhttp3.WebSocket
+import okhttp3.WebSocketListener
 import okio.ByteString
 import okio.ByteString.Companion.toByteString
 import org.webrtc.IceCandidate
 import org.webrtc.PeerConnection
 import org.webrtc.SessionDescription
-import java.util.*
+import java.util.Date
 import javax.inject.Inject
 import javax.inject.Named
 import javax.inject.Singleton
@@ -76,6 +87,7 @@ constructor(
     private var pongJob: Job? = null
     private var pingTimeoutDurationMillis: Long = 0
     private var pingIntervalDurationMillis: Long = 0
+    private var rtt: Long = 0
 
     var connectionState: ConnectionState = ConnectionState.DISCONNECTED
 
@@ -471,6 +483,28 @@ constructor(
         sendRequest(request)
     }
 
+    fun sendPing(): Long {
+        val time = Date().time
+        sendRequest(
+            with(LivekitRtc.SignalRequest.newBuilder()) {
+                ping = time
+                build()
+            },
+        )
+        sendRequest(
+            with(LivekitRtc.SignalRequest.newBuilder()) {
+                pingReq = with(LivekitRtc.Ping.newBuilder()) {
+                    rtt = this@SignalClient.rtt
+                    timestamp = time
+                    build()
+                }
+                build()
+            },
+        )
+
+        return time
+    }
+
     private fun sendRequest(request: LivekitRtc.SignalRequest) {
         val skipQueue = skipQueueTypes.contains(request.messageCase)
 
@@ -627,7 +661,8 @@ constructor(
             }
 
             LivekitRtc.SignalResponse.MessageCase.PONG_RESP -> {
-                // TODO
+                rtt = Date().time - response.pongResp.lastPingTimestamp
+                resetPingTimeout()
             }
 
             LivekitRtc.SignalResponse.MessageCase.RECONNECT -> {
@@ -649,13 +684,7 @@ constructor(
             pingJob = coroutineScope.launch {
                 while (true) {
                     delay(pingIntervalDurationMillis)
-
-                    val pingTimestamp = Date().time
-                    val pingRequest = LivekitRtc.SignalRequest.newBuilder()
-                        .setPing(pingTimestamp)
-                        .build()
-                    LKLog.v { "Sending ping: $pingTimestamp" }
-                    sendRequest(pingRequest)
+                    val pingTimestamp = sendPing()
                     startPingTimeout(pingTimestamp)
                 }
             }

@@ -11,8 +11,18 @@ import io.livekit.android.room.track.TrackPublication
 import io.livekit.android.util.FlowObservable
 import io.livekit.android.util.flow
 import io.livekit.android.util.flowDelegate
-import kotlinx.coroutines.*
-import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.isActive
 import livekit.LivekitModels
 import java.util.Date
 import javax.inject.Named
@@ -157,6 +167,8 @@ open class Participant(
         get() = participantInfo != null
 
     /**
+     * Maps track sids to their track publications.
+     *
      * Changes can be observed by using [io.livekit.android.util.flow]
      */
     @FlowObservable

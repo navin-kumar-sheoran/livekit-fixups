@@ -1,14 +1,34 @@
+/*
+ * Copyright 2023 LiveKit, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package io.livekit.android.room.util
 
 import io.livekit.android.room.track.VideoEncoding
 import io.livekit.android.room.track.VideoPreset
 import io.livekit.android.room.track.VideoPreset169
 import io.livekit.android.room.track.VideoPreset43
+import io.livekit.android.room.track.video.ScalabilityMode
 import livekit.LivekitModels
 import org.webrtc.RtpParameters
 import kotlin.math.abs
+import kotlin.math.ceil
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.math.pow
+import kotlin.math.roundToInt
 
 internal object EncodingUtils {
 
@@ -24,7 +44,7 @@ internal object EncodingUtils {
         VideoPreset169.H720,
         VideoPreset169.H1080,
         VideoPreset169.H1440,
-        VideoPreset169.H2160
+        VideoPreset169.H2160,
     )
 
     // Note: maintain order from smallest to biggest.
@@ -66,7 +86,8 @@ internal object EncodingUtils {
     fun videoLayersFromEncodings(
         trackWidth: Int,
         trackHeight: Int,
-        encodings: List<RtpParameters.Encoding>
+        encodings: List<RtpParameters.Encoding>,
+        isSVC: Boolean,
     ): List<LivekitModels.VideoLayer> {
         return if (encodings.isEmpty()) {
             listOf(
@@ -76,8 +97,21 @@ internal object EncodingUtils {
                     quality = LivekitModels.VideoQuality.HIGH
                     bitrate = 0
                     ssrc = 0
-                }.build()
+                }.build(),
             )
+        } else if (isSVC) {
+            val encodingSM = encodings.first().scalabilityMode!!
+            val scalabilityMode = ScalabilityMode.parseFromString(encodingSM)
+            val maxBitrate = encodings.first().maxBitrateBps ?: 0
+            (0 until scalabilityMode.spatial).map { index ->
+                LivekitModels.VideoLayer.newBuilder().apply {
+                    width = ceil(trackWidth / (2f.pow(index))).roundToInt()
+                    height = ceil(trackHeight / (2f.pow(index))).roundToInt()
+                    quality = LivekitModels.VideoQuality.forNumber(LivekitModels.VideoQuality.HIGH.number - index)
+                    bitrate = ceil(maxBitrate / 3f.pow(index)).roundToInt()
+                    ssrc = 0
+                }.build()
+            }
         } else {
             encodings.map { encoding ->
                 val scaleDownBy = encoding.scaleResolutionDownBy ?: 1.0

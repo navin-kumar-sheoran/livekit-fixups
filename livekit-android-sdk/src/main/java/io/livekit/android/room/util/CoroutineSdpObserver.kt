@@ -56,7 +56,7 @@ open class CoroutineSdpObserver : SdpObserver {
         setOutcome = Either.Right(message)
     }
 
-    suspend fun awaitCreate() = suspendCoroutine<Either<SessionDescription, String?>> { cont ->
+    suspend fun awaitCreate() = suspendCoroutine { cont ->
         val curOutcome = createOutcome
         if (curOutcome != null) {
             cont.resume(curOutcome)
@@ -65,7 +65,7 @@ open class CoroutineSdpObserver : SdpObserver {
         }
     }
 
-    suspend fun awaitSet() = suspendCoroutine<Either<Unit, String?>> { cont ->
+    suspend fun awaitSet() = suspendCoroutine { cont ->
         val curOutcome = setOutcome
         if (curOutcome != null) {
             cont.resume(curOutcome)

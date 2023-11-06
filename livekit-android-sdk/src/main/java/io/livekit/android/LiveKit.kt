@@ -3,6 +3,7 @@ package io.livekit.android
 import android.app.Application
 import android.content.Context
 import io.livekit.android.dagger.DaggerLiveKitComponent
+import io.livekit.android.dagger.RTCModule
 import io.livekit.android.dagger.create
 import io.livekit.android.room.ProtocolVersion
 import io.livekit.android.room.Room
@@ -44,6 +45,16 @@ class LiveKit {
         var enableWebRTCLogging: Boolean = false
 
         /**
+         * Certain WebRTC classes need to be initialized prior to use.
+         *
+         * This does not need to be called under normal circumstances, as [LiveKit.create]
+         * will handle this for you.
+         */
+        fun init(appContext: Context) {
+            RTCModule.libWebrtcInitialization(appContext)
+        }
+
+        /**
          * Create a Room object.
          */
         fun create(
@@ -77,6 +88,7 @@ class LiveKit {
                 room.videoTrackPublishDefaults = it
             }
             room.adaptiveStream = options.adaptiveStream
+            room.dynacast = options.dynacast
 
             return room
         }
@@ -94,7 +106,7 @@ class LiveKit {
             options: ConnectOptions = ConnectOptions(),
             roomOptions: RoomOptions = RoomOptions(),
             listener: RoomListener? = null,
-            overrides: LiveKitOverrides = LiveKitOverrides()
+            overrides: LiveKitOverrides = LiveKitOverrides(),
         ): Room {
             val room = create(appContext, roomOptions, overrides)
 

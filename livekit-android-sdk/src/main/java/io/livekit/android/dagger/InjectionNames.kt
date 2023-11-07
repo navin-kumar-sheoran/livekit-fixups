@@ -1,3 +1,19 @@
+/*
+ * Copyright 2023 LiveKit, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package io.livekit.android.dagger
 
 /**
@@ -13,7 +29,7 @@ object InjectionNames {
     /**
      * @see [kotlinx.coroutines.Dispatchers.IO]
      */
-    internal const val DISPATCHER_IO = "dispatcher_io";
+    internal const val DISPATCHER_IO = "dispatcher_io"
 
     /**
      * @see [kotlinx.coroutines.Dispatchers.Main]
@@ -38,4 +54,6 @@ object InjectionNames {
     internal const val OVERRIDE_VIDEO_ENCODER_FACTORY = "override_video_encoder_factory"
     internal const val OVERRIDE_VIDEO_DECODER_FACTORY = "override_video_decoder_factory"
     internal const val OVERRIDE_AUDIO_HANDLER = "override_audio_handler"
+    internal const val OVERRIDE_AUDIO_OUTPUT_TYPE = "override_audio_output_type"
+    internal const val OVERRIDE_EGL_BASE = "override_egl_base"
 }

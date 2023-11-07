@@ -2,7 +2,9 @@ package io.livekit.android
 
 import io.livekit.android.audio.AudioHandler
 import io.livekit.android.audio.NoAudioHandler
+import io.livekit.android.room.Room
 import okhttp3.OkHttpClient
+import org.webrtc.EglBase
 import org.webrtc.VideoDecoderFactory
 import org.webrtc.VideoEncoderFactory
 import org.webrtc.audio.AudioDeviceModule
@@ -46,4 +48,13 @@ data class LiveKitOverrides(
      */
 
     val audioHandler: AudioHandler? = null
+    /**
+     * Override the [EglBase] used by the library.
+     *
+     * If a non-null value is passed, the library does not
+     * take ownership of the object and will not release it upon [Room.release].
+     * It is the responsibility of the owner to call [EglBase.release] when finished
+     * with it to prevent memory leaks.
+     */
+    val eglBase: EglBase? = null,
 )

@@ -44,4 +44,9 @@ class OverridesModule(private val overrides: LiveKitOverrides) {
     @Nullable
     fun audioHandler() = overrides.audioHandler
 
+    @Provides
+    @Named(InjectionNames.OVERRIDE_EGL_BASE)
+    @Nullable
+    fun eglBase() = overrides.eglBase
+
 }

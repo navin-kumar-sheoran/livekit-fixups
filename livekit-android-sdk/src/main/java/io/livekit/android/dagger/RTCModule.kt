@@ -28,7 +28,15 @@ import io.livekit.android.util.LKLog
 import io.livekit.android.util.LoggingLevel
 import io.livekit.android.webrtc.CustomVideoDecoderFactory
 import io.livekit.android.webrtc.CustomVideoEncoderFactory
-import org.webrtc.*
+import org.webrtc.EglBase
+import org.webrtc.Logging
+import org.webrtc.MediaStreamTrack
+import org.webrtc.PeerConnectionFactory
+import org.webrtc.RtpCapabilities
+import org.webrtc.SoftwareVideoDecoderFactory
+import org.webrtc.SoftwareVideoEncoderFactory
+import org.webrtc.VideoDecoderFactory
+import org.webrtc.VideoEncoderFactory
 import org.webrtc.audio.AudioDeviceModule
 import org.webrtc.audio.JavaAudioDeviceModule
 import timber.log.Timber
@@ -171,12 +179,14 @@ object RTCModule {
     @Provides
     @Singleton
     fun eglBase(
+        @Named(InjectionNames.OVERRIDE_EGL_BASE)
+        @Nullable
+        eglBaseOverride: EglBase?,
         memoryManager: CloseableManager,
     ): EglBase {
-        val eglBase = EglBase.create()
-        memoryManager.registerResource(eglBase) { eglBase.release() }
-
-        return eglBase
+        return eglBaseOverride ?: EglBase
+            .create()
+            .apply { memoryManager.registerClosable { release() } }
     }
 
     @Provides

@@ -1,14 +1,27 @@
+/*
+ * Copyright 2023 LiveKit, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package io.livekit.android.webrtc
 
 import io.livekit.android.util.LKLog
 import kotlinx.coroutines.suspendCancellableCoroutine
 import org.webrtc.MediaStreamTrack
-import org.webrtc.PeerConnection
 import org.webrtc.RTCStats
 import org.webrtc.RTCStatsCollectorCallback
 import org.webrtc.RTCStatsReport
-import org.webrtc.RtpReceiver
-import org.webrtc.RtpSender
 import kotlin.coroutines.resume
 
 /**
@@ -125,7 +138,7 @@ private fun getExtraStats(
     codecIds: Set<String?>,
     localCandidateId: String?,
     remoteCandidateId: String?,
-    statsMap: Map<String, RTCStats>
+    statsMap: Map<String, RTCStats>,
 ): Set<RTCStats> {
     val extraStats: MutableSet<RTCStats> = HashSet()
     for (stats in statsMap.values) {
@@ -159,14 +172,3 @@ suspend fun RTCStatsGetter.getStats(): RTCStatsReport = suspendCancellableCorout
     }
     this.invoke(listener)
 }
-
-fun createStatsGetter(peerConnection: PeerConnection, sender: RtpSender): RTCStatsGetter =
-    { statsCallback: RTCStatsCollectorCallback ->
-        peerConnection.getStats(sender, statsCallback)
-    }
-
-fun createStatsGetter(peerConnection: PeerConnection, receiver: RtpReceiver): RTCStatsGetter =
-    { statsCallback: RTCStatsCollectorCallback ->
-        peerConnection.getStats(receiver, statsCallback)
-    }
-

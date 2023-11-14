@@ -58,7 +58,6 @@ import io.livekit.android.util.FlowObservable
 import io.livekit.android.util.LKLog
 import io.livekit.android.util.flowDelegate
 import io.livekit.android.util.invoke
-import io.livekit.android.webrtc.createStatsGetter
 import io.livekit.android.webrtc.getFilteredStats
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
@@ -735,7 +734,7 @@ constructor(
             trackSid = track.id()
         }
         val participant = getOrCreateRemoteParticipant(participantSid)
-        val statsGetter = createStatsGetter(engine.subscriber.peerConnection, receiver)
+        val statsGetter = engine.createStatsGetter(receiver)
         participant.addSubscribedMediaTrack(
             track,
             trackSid!!,

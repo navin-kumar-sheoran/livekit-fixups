@@ -46,7 +46,6 @@ import io.livekit.android.room.track.VideoCodec
 import io.livekit.android.room.track.VideoEncoding
 import io.livekit.android.room.util.EncodingUtils
 import io.livekit.android.util.LKLog
-import io.livekit.android.webrtc.createStatsGetter
 import io.livekit.android.webrtc.sortVideoCodecPreferences
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.launch
@@ -411,12 +410,12 @@ internal constructor(
             return false
         }
 
-        track.statsGetter = createStatsGetter(engine.publisher.peerConnection, transceiver.sender)
+        track.statsGetter = engine.createStatsGetter(transceiver.sender)
 
         // Handle trackBitrates
         if (encodings.isNotEmpty()) {
             if (options is VideoTrackPublishOptions && isSVCCodec(options.videoCodec) && encodings.firstOrNull()?.maxBitrateBps != null) {
-                engine.publisher.registerTrackBitrateInfo(
+                engine.registerTrackBitrateInfo(
                     cid = cid,
                     TrackBitrateInfo(
                         codec = options.videoCodec,
@@ -574,13 +573,7 @@ internal constructor(
         tracks = tracks.toMutableMap().apply { remove(sid) }
 
         if (engine.connectionState == ConnectionState.CONNECTED) {
-            val senders = engine.publisher.peerConnection.senders
-            for (sender in senders) {
-                val t = sender.track() ?: continue
-                if (t.id() == track.rtcTrack.id()) {
-                    engine.publisher.peerConnection.removeTrack(sender)
-                }
-            }
+            engine.removeTrack(track.rtcTrack)
         }
         if (stopOnUnpublish) {
             track.stop()

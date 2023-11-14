@@ -1,7 +1,22 @@
+/*
+ * Copyright 2023 LiveKit, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package io.livekit.android.room
 
 import io.livekit.android.MockE2ETest
-import io.livekit.android.mock.MockPeerConnection
 import io.livekit.android.util.toOkioByteString
 import io.livekit.android.util.toPBByteString
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -32,7 +47,7 @@ class RTCEngineMockE2ETest : MockE2ETest() {
         connect()
         val sentIceServers = SignalClientTest.JOIN.join.iceServersList
             .map { it.toWebrtc() }
-        val subPeerConnection = rtcEngine.subscriber.peerConnection as MockPeerConnection
+        val subPeerConnection = getSubscriberPeerConnection()
 
         assertEquals(sentIceServers, subPeerConnection.rtcConfig.iceServers)
     }
@@ -42,7 +57,7 @@ class RTCEngineMockE2ETest : MockE2ETest() {
         connect()
         assertEquals(
             SignalClientTest.OFFER.offer.sdp,
-            rtcEngine.subscriber.peerConnection.remoteDescription.description
+            getSubscriberPeerConnection().remoteDescription?.description,
         )
 
         val ws = wsFactory.ws
@@ -50,7 +65,7 @@ class RTCEngineMockE2ETest : MockE2ETest() {
             .mergeFrom(ws.sentRequests[0].toPBByteString())
             .build()
 
-        val subPeerConnection = rtcEngine.subscriber.peerConnection as MockPeerConnection
+        val subPeerConnection = getSubscriberPeerConnection()
         val localAnswer = subPeerConnection.localDescription ?: throw IllegalStateException("no answer was created.")
         Assert.assertTrue(sentRequest.hasAnswer())
         assertEquals(localAnswer.description, sentRequest.answer.sdp)
@@ -73,7 +88,7 @@ class RTCEngineMockE2ETest : MockE2ETest() {
         connect()
         val oldWs = wsFactory.ws
 
-        val subPeerConnection = rtcEngine.subscriber.peerConnection as MockPeerConnection
+        val subPeerConnection = getSubscriberPeerConnection()
         subPeerConnection.moveToIceConnectionState(PeerConnection.IceConnectionState.FAILED)
         testScheduler.advanceTimeBy(1000)
 
@@ -86,7 +101,7 @@ class RTCEngineMockE2ETest : MockE2ETest() {
         connect()
         val oldWs = wsFactory.ws
 
-        val pubPeerConnection = rtcEngine.publisher.peerConnection as MockPeerConnection
+        val pubPeerConnection = getPublisherPeerConnection()
         pubPeerConnection.moveToIceConnectionState(PeerConnection.IceConnectionState.FAILED)
         testScheduler.advanceTimeBy(1000)
 
@@ -110,18 +125,20 @@ class RTCEngineMockE2ETest : MockE2ETest() {
 
     @Test
     fun relayConfiguration() = runTest {
-        connect(with(SignalClientTest.JOIN.toBuilder()) {
-            join = with(join.toBuilder()) {
-                clientConfiguration = with(LivekitModels.ClientConfiguration.newBuilder()) {
-                    forceRelay = LivekitModels.ClientConfigSetting.ENABLED
+        connect(
+            with(SignalClientTest.JOIN.toBuilder()) {
+                join = with(join.toBuilder()) {
+                    clientConfiguration = with(LivekitModels.ClientConfiguration.newBuilder()) {
+                        forceRelay = LivekitModels.ClientConfigSetting.ENABLED
+                        build()
+                    }
                     build()
                 }
                 build()
-            }
-            build()
-        })
+            },
+        )
 
-        val subPeerConnection = rtcEngine.subscriber.peerConnection as MockPeerConnection
+        val subPeerConnection = getSubscriberPeerConnection()
         assertEquals(PeerConnection.IceTransportsType.RELAY, subPeerConnection.rtcConfig.iceTransportsType)
     }
 

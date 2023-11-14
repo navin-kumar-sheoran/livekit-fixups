@@ -1,3 +1,19 @@
+/*
+ * Copyright 2023 LiveKit, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package io.livekit.android.room
 
 import com.vdurmont.semver4j.Semver
@@ -74,13 +90,17 @@ constructor(
     private var joinContinuation: CancellableContinuation<
             Either<
                     JoinResponse,
-                    Either<ReconnectResponse, Unit>>>? = null
+                    Either<ReconnectResponse, Unit>,
+                    >,
+            >? = null
     private lateinit var coroutineScope: CloseableCoroutineScope
 
     private val requestFlowJobLock = Object()
     private var requestFlowJob: Job? = null
     private val requestFlow = MutableSharedFlow<LivekitRtc.SignalRequest>(Int.MAX_VALUE)
 
+    private val responseFlowJobLock = Object()
+    private var responseFlowJob: Job? = null
     private val responseFlow = MutableSharedFlow<LivekitRtc.SignalResponse>(Int.MAX_VALUE)
 
     private var pingJob: Job? = null
@@ -116,7 +136,7 @@ constructor(
                     reconnect = true
                     this.participantSid = participantSid
                 },
-            lastRoomOptions ?: RoomOptions()
+            lastRoomOptions ?: RoomOptions(),
         )
         return (reconnectResponse as Either.Right).value
     }
@@ -125,7 +145,7 @@ constructor(
         url: String,
         token: String,
         options: ConnectOptions,
-        roomOptions: RoomOptions
+        roomOptions: RoomOptions,
     ): Either<JoinResponse, Either<ReconnectResponse, Unit>> {
         // Clean up any pre-existing connection.
         close(reason = "Starting new connection")
@@ -155,9 +175,8 @@ constructor(
         token: String,
         clientInfo: LivekitModels.ClientInfo,
         options: ConnectOptions,
-        roomOptions: RoomOptions
+        roomOptions: RoomOptions,
     ): String {
-
         val queryParams = mutableListOf<Pair<String, String>>()
         queryParams.add(CONNECT_QUERY_TOKEN to token)
         queryParams.add(CONNECT_QUERY_PROTOCOL to options.protocolVersion.value.toString())
@@ -196,10 +215,17 @@ constructor(
      * Should be called after resolving the join message.
      */
     fun onReadyForResponses() {
-        coroutineScope.launch {
-            responseFlow.collect {
-                responseFlow.resetReplayCache()
-                handleSignalResponseImpl(it)
+        if (responseFlowJob != null) {
+            return
+        }
+        synchronized(responseFlowJobLock) {
+            if (responseFlowJob == null) {
+                responseFlowJob = coroutineScope.launch {
+                    responseFlow.collect {
+                        responseFlow.resetReplayCache()
+                        handleSignalResponseImpl(it)
+                    }
+                }
             }
         }
     }
@@ -229,7 +255,7 @@ constructor(
         startRequestQueue()
     }
 
-    //--------------------------------- WebSocket Listener --------------------------------------//
+    // --------------------------------- WebSocket Listener --------------------------------------//
     override fun onMessage(webSocket: WebSocket, text: String) {
         LKLog.w { "received JSON message, unsupported in this version." }
     }
@@ -286,7 +312,7 @@ constructor(
             // Handle websocket closure here.
             handleWebSocketClose(
                 reason = reason ?: response?.toString() ?: t.localizedMessage ?: "websocket failure",
-                code = response?.code ?: CLOSE_REASON_WEBSOCKET_FAILURE
+                code = response?.code ?: CLOSE_REASON_WEBSOCKET_FAILURE,
             )
         }
     }
@@ -301,7 +327,7 @@ constructor(
         pongJob?.cancel()
     }
 
-    //------------------------------- End WebSocket Listener ------------------------------------//
+    // ------------------------------- End WebSocket Listener ------------------------------------//
 
     private fun fromProtoSessionDescription(sd: LivekitRtc.SessionDescription): SessionDescription {
         val rtcSdpType = when (sd.type) {
@@ -335,7 +361,7 @@ constructor(
         val iceCandidateJSON = IceCandidateJSON(
             candidate = candidate.sdp,
             sdpMid = candidate.sdpMid,
-            sdpMLineIndex = candidate.sdpMLineIndex
+            sdpMLineIndex = candidate.sdpMLineIndex,
         )
 
         val trickleRequest = LivekitRtc.TrickleRequest.newBuilder()
@@ -370,12 +396,14 @@ constructor(
         cid: String,
         name: String,
         type: LivekitModels.TrackType,
-        builder: LivekitRtc.AddTrackRequest.Builder = LivekitRtc.AddTrackRequest.newBuilder()
+        builder: LivekitRtc.AddTrackRequest.Builder = LivekitRtc.AddTrackRequest.newBuilder(),
     ) {
+        val encryptionType = lastRoomOptions?.e2eeOptions?.encryptionType ?: LivekitModels.Encryption.Type.NONE
         val addTrackRequest = builder
             .setCid(cid)
             .setName(name)
             .setType(type)
+            .setEncryption(encryptionType)
         val request = LivekitRtc.SignalRequest.newBuilder()
             .setAddTrack(addTrackRequest)
             .build()
@@ -435,7 +463,7 @@ constructor(
 
     fun sendUpdateSubscriptionPermissions(
         allParticipants: Boolean,
-        participantTrackPermissions: List<ParticipantTrackPermission>
+        participantTrackPermissions: List<ParticipantTrackPermission>,
     ) {
         val update = LivekitRtc.SubscriptionPermission.newBuilder()
             .setAllParticipants(allParticipants)
@@ -595,7 +623,7 @@ constructor(
                 val iceCandidate = IceCandidate(
                     iceCandidateJson.sdpMid,
                     iceCandidateJson.sdpMLineIndex,
-                    iceCandidateJson.candidate
+                    iceCandidateJson.candidate,
                 )
                 listener?.onTrickle(iceCandidate, response.trickle.target)
             }
@@ -721,6 +749,8 @@ constructor(
         }
         requestFlowJob?.cancel()
         requestFlowJob = null
+        responseFlowJob?.cancel()
+        responseFlowJob = null
         pingJob?.cancel()
         pingJob = null
         pongJob?.cancel()
@@ -730,7 +760,7 @@ constructor(
         joinContinuation?.cancel()
         joinContinuation = null
         // TODO: support calling this from connect without wiping any queued requests.
-        //requestFlow.resetReplayCache()
+        // requestFlow.resetReplayCache()
         responseFlow.resetReplayCache()
         lastUrl = null
         lastOptions = null

@@ -6,7 +6,11 @@ import android.net.Network
 import androidx.test.platform.app.InstrumentationRegistry
 import io.livekit.android.MockE2ETest
 import io.livekit.android.assert.assertIsClassList
-import io.livekit.android.events.*
+import io.livekit.android.events.DisconnectReason
+import io.livekit.android.events.EventCollector
+import io.livekit.android.events.FlowCollector
+import io.livekit.android.events.RoomEvent
+import io.livekit.android.events.convert
 import io.livekit.android.mock.MockAudioStreamTrack
 import io.livekit.android.mock.MockMediaStream
 import io.livekit.android.mock.MockRtpReceiver
@@ -18,8 +22,12 @@ import io.livekit.android.room.track.Track
 import io.livekit.android.util.flow
 import io.livekit.android.util.toOkioByteString
 import junit.framework.Assert.assertEquals
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import livekit.LivekitRtc
 import org.junit.Assert
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -319,6 +327,52 @@ class RoomMockE2ETest : MockE2ETest() {
                 "",
                 MockAudioStreamTrack(id = SignalClientTest.LOCAL_TRACK_PUBLISHED.trackPublished.cid)
             )
+        )
+
+        val eventCollector = EventCollector(room.events, coroutineRule.scope)
+
+        wsFactory.listener.onMessage(
+            wsFactory.ws,
+            SignalClientTest.LEAVE.toOkioByteString(),
+        )
+        room.disconnect()
+        val events = eventCollector.stopCollecting()
+
+        assertEquals(2, events.size)
+        assertEquals(true, events[0] is RoomEvent.TrackUnpublished)
+        assertEquals(true, events[1] is RoomEvent.Disconnected)
+    }
+
+    /**
+     *
+     */
+    @Test
+    fun disconnectWithTracks() = runTest {
+        connect()
+
+        val differentThread = CoroutineScope(Dispatchers.IO + SupervisorJob())
+        wsFactory.registerSignalRequestHandler {
+            if (it.hasLeave()) {
+                differentThread.launch {
+                    val leaveResponse = with(LivekitRtc.SignalResponse.newBuilder()) {
+                        leave = with(LivekitRtc.LeaveRequest.newBuilder()) {
+                            canReconnect = false
+                            reason = livekit.LivekitModels.DisconnectReason.CLIENT_INITIATED
+                            build()
+                        }
+                        build()
+                    }
+                    wsFactory.receiveMessage(leaveResponse)
+                }
+                return@registerSignalRequestHandler true
+            }
+            return@registerSignalRequestHandler false
+        }
+        room.localParticipant.publishAudioTrack(
+            LocalAudioTrack(
+                "",
+                MockAudioStreamTrack(id = SignalClientTest.LOCAL_TRACK_PUBLISHED.trackPublished.cid),
+            ),
         )
 
         val eventCollector = EventCollector(room.events, coroutineRule.scope)

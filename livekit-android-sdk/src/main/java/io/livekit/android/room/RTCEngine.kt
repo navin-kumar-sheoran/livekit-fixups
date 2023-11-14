@@ -380,6 +380,7 @@ internal constructor(
 
             val reconnectStartTime = SystemClock.elapsedRealtime()
             for (retries in 0 until MAX_RECONNECT_RETRIES) {
+                ensureActive()
                 if (retries != 0) {
                     yield()
                 }
@@ -444,6 +445,7 @@ internal constructor(
                     }
                 }
 
+                ensureActive()
                 if (isClosed) {
                     LKLog.v { "RTCEngine closed, aborting reconnection" }
                     break
@@ -461,6 +463,7 @@ internal constructor(
                     }
                 }
 
+                ensureActive()
                 if (isClosed) {
                     LKLog.v { "RTCEngine closed, aborting reconnection" }
                     break
@@ -475,6 +478,7 @@ internal constructor(
                     delay(100)
                 }
 
+                ensureActive()
                 if (isClosed) {
                     LKLog.v { "RTCEngine closed, aborting reconnection" }
                     break

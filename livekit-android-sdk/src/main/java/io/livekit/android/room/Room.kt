@@ -587,8 +587,8 @@ constructor(
         }
 
         state = State.DISCONNECTED
-        engine.close()
         cleanupRoom()
+        engine.close()
 
         listener?.onDisconnect(this, null)
         listener = null

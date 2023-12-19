@@ -47,7 +47,7 @@ data class LiveKitOverrides(
      * Use [NoAudioHandler] to turn off automatic audio handling.
      */
 
-    val audioHandler: AudioHandler? = null
+    val audioHandler: AudioHandler? = null,
     /**
      * Override the [EglBase] used by the library.
      *

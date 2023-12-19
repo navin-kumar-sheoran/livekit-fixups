@@ -124,7 +124,7 @@ dokkaHtml {
 
                 // URL showing where the source code can be accessed through the web browser
                 remoteUrl.set(new URL(
-                    "https://github.com/livekit/client-sdk-android/tree/master/livekit-android-sdk/src/main/java"))
+                        "https://github.com/navin-kumar-sheoran/android-livekit/tree/main/livekit-android-sdk/src/main/java"))
                 // Suffix which is used to append the line number to the URL. Use #L for GitHub
                 remoteLineSuffix.set("#L")
             }
@@ -175,23 +175,4 @@ dependencies {
     kaptTest "com.google.dagger:dagger-compiler:${versions.dagger}"
     androidTestImplementation deps.androidx_test.junit
     androidTestImplementation deps.espresso
-}
-
-apply from: rootProject.file('gradle/gradle-mvn-push.gradle')
-
-afterEvaluate {
-    publishing {
-        publications {
-            // Creates a Maven publication called "release".
-            release(MavenPublication) {
-                // Applies the component for the release build variant.
-                from components.release
-
-                // You can then customize attributes of the publication as shown below.
-                groupId = GROUP
-                artifactId = POM_ARTIFACT_ID
-                version = VERSION_NAME
-            }
-        }
-    }
 }

@@ -124,7 +124,7 @@ dokkaHtml {
 
                 // URL showing where the source code can be accessed through the web browser
                 remoteUrl.set(new URL(
-                        "https://github.com/navin-kumar-sheoran/android-livekit/tree/main/livekit-android-sdk/src/main/java"))
+                        "https://github.com/navin-kumar-sheoran/livekit-fixups/tree/main/livekit-android-sdk/src/main/java"))
                 // Suffix which is used to append the line number to the URL. Use #L for GitHub
                 remoteLineSuffix.set("#L")
             }
